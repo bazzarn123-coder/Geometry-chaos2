@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Geometry Chaos - Double Jump Edition</title>
+    <link id="favicon" rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2305050d'/><rect x='4' y='4' width='24' height='24' rx='3' fill='%23ff3366' stroke='%23000' stroke-width='2'/></svg>">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        html, body {
+            height: 100%; height: 100dvh; 
+            background-color: #05050d; font-family: 'Segoe UI', Tahoma, sans-serif;
+            display: flex; justify-content: center; align-items: center; 
+            overflow: hidden; color: white; touch-action: none; 
+        }
+        #game-container {
+            position: relative; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            background: radial-gradient(circle at center, #111122 0%, #05050d 100%);
+        }
+        canvas { 
+            display: block; max-width: 100%; max-height: 100%; 
+            aspect-ratio: 850 / 480; object-fit: contain;
+            box-shadow: 0 0 40px rgba(0, 255, 204, 0.15);
+        }
+        #ui {
+            position: absolute; top: 15px; left: 20px; right: 20px; display: flex;
+            justify-content: space-between; font-size: clamp(14px, 4vw, 18px); font-weight: 800;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.9); pointer-events: none; z-index: 5;
+        }
+        .stats-group { display: flex; gap: 15px; }
+        .stat-box {
+            background: rgba(0, 0, 0, 0.7); padding: 6px 14px; border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(4px);
+        }
+        #chaos-alert {
+            position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+            background: rgba(255, 51, 102, 0.9); color: #fff; font-size: 20px;
+            padding: 8px 24px; border-radius: 25px; pointer-events: none;
+            transition: opacity 0.3s; z-index: 6; text-transform: uppercase;
+        }
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 5, 13, 0.85); backdrop-filter: blur(8px); display: flex;
+            flex-direction: column; justify-content: center; align-items: center; gap: 15px; z-index: 10;
+        }
+        .overlay h1 {
+            color: #00ffcc; font-size: clamp(28px, 8vw, 42px); text-transform: uppercase; 
+            letter-spacing: 3px; text-shadow: 0 0 20px rgba(0, 255, 204, 0.6); margin-bottom: 5px; text-align: center;
+        }
+        .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 90%; max-width: 500px; }
+        .btn {
+            background: linear-gradient(45deg, #2b2b36, #1f1f2e); color: #fff; border: 1px solid #444;
+            padding: 16px 10px; font-size: 14px; font-weight: bold; border-radius: 12px;
+            cursor: pointer; transition: 0.2s; text-align: center;
+        }
+        .btn:hover { background: #333344; border-color: #00ffcc; box-shadow: 0 0 15px rgba(0, 255, 204, 0.4); }
+        .btn:active { transform: scale(0.96); }
+        .btn-full { grid-column: span 2; background: linear-gradient(45deg, #00ffcc, #ff3366); color: #000; border: none; font-size: 16px; }
+        .btn-full:hover { box-shadow: 0 0 25px rgba(255, 51, 102, 0.6); }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="ui">
+            <div class="stats-group">
+                <div class="stat-box" id="score">Score: 0</div>
+                <div class="stat-box" id="coins" style="color: #ffd700;">🪙 0</div>
+            </div>
+            <div class="stat-box" id="mode-display" style="color: #00ffcc;">SINGLE MODE</div>
+        </div>
+
+        <div id="chaos-alert" class="hidden">⚡ MODE SWITCH!</div>
+
+        <div id="splash-screen" class="overlay">
+            <h1>Geometry Chaos</h1>
+            <p style="color: #aaa; margin-bottom: 10px; text-align: center;">Double Jump & Fixed Beat Edition</p>
+            <div class="mode-grid">
+                <button class="btn" onclick="selectMode('single')">1. Single Level</button>
+                <button class="btn" onclick="selectMode('double')">2. Double Floor</button>
+                <button class="btn" onclick="selectMode('mirrored')">3. Mirrored Mode</button>
+                <button class="btn" onclick="selectMode('dual')">4. Dual Layers</button>
+                <button class="btn btn-full" onclick="selectMode('all')">⚡ ALL MODES (Chaos Shift)</button>
+            </div>
+        </div>
+
+        <div id="game-over" class="overlay hidden">
+            <h1 style="color: #ff3366; text-shadow: 0 0 20px rgba(255,51,102,0.6);">CRASHED!</h1>
+            <p id="final-score" style="font-size: 20px;">Score: 0</p>
+            <p id="final-coins" style="color: #ffd700; margin-bottom: 15px;">Coins: 0</p>
+            <div style="display: flex; gap: 15px;">
+                <button class="btn" style="background: #00ffcc; color:#000; padding: 12px 24px;" onclick="resetGame()">Retry</button>
+                <button class="btn" style="padding: 12px 24px;" onclick="showMenu()">Menu</button>
+            </div>
+        </div>
+
+        <canvas id="canvas" width="850" height="480"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const ui = {
+            score: document.getElementById('score'),
+            coins: document.getElementById('coins'),
+            mode: document.getElementById('mode-display'),
+            alert: document.getElementById('chaos-alert'),
+            splash: document.getElementById('splash-screen'),
+            gameOver: document.getElementById('game-over'),
+            finalScore: document.getElementById('final-score'),
+            finalCoins: document.getElementById('final-coins')
+        };
+
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+        
+        function playSound(type) {
+            if (typeof AudioContext === 'undefined') return;
+            if (!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') return;
+            
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            
+            if (type === 'jump') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.exponentialRampToValueAtTime(600, now + 0.12);
+                gain.gain.setValueAtTime(0.06, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+                osc.start(now); osc.stop(now + 0.12);
+            } else if (type === 'doubleJump') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+                gain.gain.setValueAtTime(0.06, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+                osc.start(now); osc.stop(now + 0.12);
+            } else if (type === 'coin') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(1000, now);
+                osc.frequency.setValueAtTime(1500, now + 0.05);
+                gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                osc.start(now); osc.stop(now + 0.2);
+            } else if (type === 'crash') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(20, now + 0.3);
+                gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            }
+        }
+
+        function playBeat(type) {
+            if (!audioCtx || audioCtx.state === 'suspended') return;
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            
+            if (type === 'kick') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.5);
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+                osc.start(now); osc.stop(now + 0.5);
+            } else if (type === 'hat') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(8000, now);
+                gain.gain.setValueAtTime(0.03, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                osc.start(now); osc.stop(now + 0.05);
+            }
+        }
+
+        // CONSTANT SPEED, ZERO ACCELERATION, DOUBLE JUMP ENABLED
+        const GRAVITY = 0.95; 
+        const JUMP_FORCE = -17.5; 
+        const SPEED = 7.5; 
+        const BEAT_FRAMES = 30; // Half-second beat sync
+        
+        const Y_FLOOR1 = 400; const Y_FLOOR2 = 200; 
+        const DUAL_G1 = 220; const DUAL_G2 = 260;
+
+        let gameActive = false;
+        let mode = 'single', activeMode = 'single';
+        let score = 0, coinsCount = 0, frames = 0;
+        let bgOffset = 0; let bgFlash = 0;
+
+        let obstacles = [], coins = [];
+        let nextSpawnFrame = 60, nextChaosFrame = 0;
+
+        const isMirrored = () => activeMode === 'mirrored' || activeMode === 'double-mirrored';
+        const isDual = () => activeMode === 'dual';
+
+        class Player {
+            constructor(layer = 1) {
+                this.layer = layer; this.size = 32; 
+                this.color = layer === 1 ? '#ff3366' : '#00ffcc'; 
+                this.reset();
+            }
+            reset() {
+                this.baseX = isMirrored() ? canvas.width - 150 : 120;
+                this.x = this.baseX;
+                this.y = isDual() ? (this.layer === 1 ? DUAL_G1 - this.size : DUAL_G2) : Y_FLOOR1 - this.size;
+                this.vy = 0; this.rotation = 0; this.grounded = true; 
+                this.hasDoubleJumped = false; this.jumpBuffered = false;
+            }
+            jump() {
+                if (this.grounded) {
+                    this.vy = (isDual() && this.layer === 2) ? -JUMP_FORCE : JUMP_FORCE;
+                    this.grounded = false; 
+                    this.hasDoubleJumped = false;
+                    this.jumpBuffered = false;
+                    playSound('jump');
+                } else if (!this.hasDoubleJumped) {
+                    // Double jump in mid-air!
+                    this.vy = (isDual() && this.layer === 2) ? -JUMP_FORCE * 0.9 : JUMP_FORCE * 0.9;
+                    this.hasDoubleJumped = true;
+                    this.jumpBuffered = false;
+                    playSound('doubleJump');
+                } else {
+                    this.jumpBuffered = true; 
+                }
+            }
+            update() {
+                if (this.x < this.baseX) this.x += 1;
+                if (this.x > this.baseX) this.x -= 1;
+
+                this.vy += (isDual() && this.layer === 2) ? -GRAVITY : GRAVITY;
+                this.y += this.vy;
+                
+                let floorY = isDual() ? (this.layer === 1 ? DUAL_G1 : DUAL_G2) : Y_FLOOR1;
+                let landedOnFloor = false;
+
+                if (!isDual() || this.layer === 1) {
+                    if (this.y >= floorY - this.size) { 
+                        this.y = floorY - this.size; landedOnFloor = true; 
+                    }
+                } else {
+                    if (this.y <= floorY) { 
+                        this.y = floorY; landedOnFloor = true; 
+                    }
+                }
+
+                if (landedOnFloor) {
+                    this.vy = 0; this.grounded = true; this.hasDoubleJumped = false;
+                    this.rotation = Math.round(this.rotation / (Math.PI / 2)) * (Math.PI / 2);
+                    if (this.jumpBuffered) this.jump();
+                } else {
+                    this.grounded = false;
+                    this.rotation += isMirrored() ? -0.15 : 0.15;
+                }
+            }
+            draw() {
+                ctx.save(); ctx.translate(this.x + this.size/2, this.y + this.size/2); ctx.rotate(this.rotation);
+                ctx.shadowColor = this.color; ctx.shadowBlur = 15; ctx.fillStyle = this.color;
+                ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
+                ctx.fillStyle = '#111'; ctx.fillRect(-this.size/4, -this.size/4, this.size/2, this.size/2);
+                ctx.restore();
+            }
+        }
+
+        const p1 = new Player(1), p2 = new Player(2);
+
+        class Obstacle {
+            constructor(x, yFloor, w, h, type, layer = 1, yOffset = 0) {
+                this.x = x; this.w = w; this.h = h; this.type = type; this.layer = layer;
+                
+                if (type === 'bridge-over') {
+                    this.y = (isDual() && layer === 2) ? yFloor + 75 : yFloor - 85; 
+                } else if (type === 'spike') {
+                    this.y = (isDual() && layer === 2) ? yFloor : yFloor - this.h;
+                } else {
+                    this.y = (isDual() && layer === 2) ? yFloor + yOffset : yFloor - this.h - yOffset;
+                }
+            }
+            update() { this.x += isMirrored() ? SPEED : -SPEED; }
+            draw() {
+                ctx.save();
+                if (this.type === 'spike') {
+                    ctx.shadowColor = '#ff0055'; ctx.shadowBlur = 10; ctx.fillStyle = '#ff0055';
+                    ctx.beginPath();
+                    if (isDual() && this.layer === 2) {
+                        ctx.moveTo(this.x, this.y); ctx.lineTo(this.x + this.w/2, this.y + this.h); ctx.lineTo(this.x + this.w, this.y);
+                    } else {
+                        ctx.moveTo(this.x, this.y + this.h); ctx.lineTo(this.x + this.w/2, this.y); ctx.lineTo(this.x + this.w, this.y + this.h);
+                    }
+                    ctx.fill();
+                } else if (this.type === 'bridge-over') {
+                    ctx.shadowColor = '#00ffcc'; ctx.shadowBlur = 12;
+                    ctx.fillStyle = '#0a0a14'; ctx.strokeStyle = '#00ffcc'; ctx.lineWidth = 2.5;
+                    ctx.fillRect(this.x, this.y, this.w, this.h);
+                    ctx.strokeRect(this.x, this.y, this.w, this.h);
+                    ctx.fillRect(this.x + 10, this.y + this.h, 6, 40);
+                    ctx.fillRect(this.x + this.w - 16, this.y + this.h, 6, 40);
+                } else {
+                    ctx.shadowColor = '#a020f0'; ctx.shadowBlur = 10;
+                    ctx.fillStyle = '#0a0a14'; ctx.strokeStyle = '#a020f0'; ctx.lineWidth = 2;
+                    ctx.fillRect(this.x, this.y, this.w, this.h);
+                    ctx.strokeRect(this.x, this.y, this.w, this.h);
+                }
+                ctx.restore();
+            }
+        }
+
+        class Coin {
+            constructor(x, y) { this.x = x; this.y = y; this.size = 18; this.collected = false; }
+            update() { this.x += isMirrored() ? SPEED : -SPEED; }
+            draw() {
+                if (this.collected) return;
+                ctx.save(); ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 15; ctx.fillStyle = '#ffd700';
+                ctx.beginPath(); ctx.arc(this.x + this.size/2, this.y + this.size/2, this.size/2, 0, Math.PI*2); ctx.fill(); ctx.restore();
+            }
+        }
+
+        function spawnBeatPattern(startX, yFloor, layer) {
+            let pattern = Math.floor(Math.random() * 3);
+
+            if (pattern === 0) {
+                obstacles.push(new Obstacle(startX, yFloor, 32, 34, 'spike', layer));
+                coins.push(new Coin(startX + 16, yFloor - 80));
+            } 
+            else if (pattern === 1) {
+                obstacles.push(new Obstacle(startX, yFloor, 140, 20, 'bridge-over', layer));
+                coins.push(new Coin(startX + 60, yFloor - 130));
+            } 
+            else {
+                let stepWidth = 100;
+                obstacles.push(new Obstacle(startX, yFloor, stepWidth, 18, 'bridge-over', layer, 45));
+                coins.push(new Coin(startX + 40, yFloor - 95));
+            }
+        }
+
+        function checkCollisions(p) {
+            coins.forEach(c => {
+                if (!c.collected && p.x < c.x+c.size && p.x+p.size > c.x && p.y < c.y+c.size && p.y+p.size > c.y) {
+                    c.collected = true; coinsCount++; score += 50; playSound('coin');
+                }
+            });
+
+            for (let obs of obstacles) {
+                if (obs.layer !== p.layer) continue;
+                
+                if (p.x < obs.x + obs.w - 4 && p.x + p.size > obs.x + 4 && p.y < obs.y + obs.h - 4 && p.y + p.size > obs.y + 4) {
+                    
+                    if (obs.type === 'spike') return true; 
+
+                    let prevY = p.y - p.vy;
+                    let tolerance = 18; 
+
+                    if ((!isDual() || p.layer === 1) && p.vy >= 0 && prevY + p.size <= obs.y + tolerance) {
+                        p.y = obs.y - p.size; p.vy = 0; p.grounded = true; p.hasDoubleJumped = false;
+                        p.rotation = Math.round(p.rotation / (Math.PI / 2)) * (Math.PI / 2);
+                        if (p.jumpBuffered) p.jump();
+                    } 
+                    else {
+                        return true; 
+                    }
+                }
+            }
+            return false;
+        }
+
+        function drawBackground() {
+            ctx.fillStyle = '#05050d'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            bgFlash = Math.max(0, bgFlash - 0.04);
+            if (bgFlash > 0) {
+                ctx.fillStyle = `rgba(0, 255, 204, ${bgFlash * 0.08})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            bgOffset = (bgOffset + SPEED * 0.3) % 40;
+            ctx.strokeStyle = 'rgba(0, 255, 204, 0.07)';
+            ctx.lineWidth = 1;
+            
+            ctx.beginPath();
+            for (let x = -40; x < canvas.width + 40; x += 40) {
+                let dx = isMirrored() ? x + bgOffset : x - bgOffset;
+                ctx.moveTo(dx, 0); ctx.lineTo(dx, canvas.height);
+            }
+            for (let y = 0; y < canvas.height; y += 40) {
+                ctx.moveTo(0, y); ctx.lineTo(canvas.width, y);
+            }
+            ctx.stroke();
+
+            if (isDual()) {
+                ctx.fillStyle = '#0a0508'; ctx.fillRect(0, DUAL_G1, canvas.width, DUAL_G2 - DUAL_G1);
+                ctx.strokeStyle = '#ff3366'; ctx.shadowColor = '#ff3366'; ctx.shadowBlur = 10; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(0, DUAL_G1); ctx.lineTo(canvas.width, DUAL_G1); ctx.stroke();
+                ctx.strokeStyle = '#00ffcc'; ctx.shadowColor = '#00ffcc';
+                ctx.beginPath(); ctx.moveTo(0, DUAL_G2); ctx.lineTo(canvas.width, DUAL_G2); ctx.stroke(); ctx.shadowBlur = 0;
+            } else {
+                ctx.fillStyle = '#0a0508'; ctx.fillRect(0, Y_FLOOR1, canvas.width, canvas.height - Y_FLOOR1);
+                ctx.strokeStyle = '#ff3366'; ctx.shadowColor = '#ff3366'; ctx.shadowBlur = 10; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(0, Y_FLOOR1); ctx.lineTo(canvas.width, Y_FLOOR1); ctx.stroke(); ctx.shadowBlur = 0;
+            }
+        }
+
+        function triggerChaos() {
+            const modes = ['single', 'double', 'mirrored', 'dual'];
+            let newMode = activeMode;
+            while(newMode === activeMode) newMode = modes[Math.floor(Math.random() * modes.length)];
+            activeMode = newMode; ui.mode.innerText = activeMode.toUpperCase();
+            
+            p1.reset(); if(isDual()) p2.reset();
+            obstacles = []; coins = []; nextSpawnFrame = frames + 60;
+            
+            ui.alert.innerText = `⚡ CHAOS: ${activeMode}`; 
+            ui.alert.classList.remove('hidden');
+            setTimeout(() => ui.alert.classList.add('hidden'), 1500);
+            nextChaosFrame = frames + Math.floor(Math.random() * 300) + 700;
+        }
+
+        function gameLoop() {
+            if (!gameActive) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height); frames++;
+            
+            if (frames % BEAT_FRAMES === 0) {
+                playBeat('kick');
+                bgFlash = 1.0;
+                
+                const spawnX = isMirrored() ? -100 : canvas.width + 50;
+                if (isDual()) {
+                    spawnBeatPattern(spawnX, DUAL_G1, 1);
+                    spawnBeatPattern(spawnX, DUAL_G2, 2);
+                } else {
+                    spawnBeatPattern(spawnX, Y_FLOOR1, 1);
+                }
+            } else if (frames % BEAT_FRAMES === Math.floor(BEAT_FRAMES / 2)) {
+                playBeat('hat');
+            }
+
+            if (mode === 'all' && frames >= nextChaosFrame) triggerChaos();
+
+            score = Math.floor(frames / 5) + (coinsCount * 50);
+            ui.score.innerText = `Score: ${score}`; ui.coins.innerText = `🪙 ${coinsCount}`;
+
+            drawBackground();
+
+            p1.update(); p1.draw();
+            if (isDual()) { p2.update(); p2.draw(); }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].update(); obstacles[i].draw();
+                if (obstacles[i].x < -300 || obstacles[i].x > canvas.width + 300) obstacles.splice(i, 1);
+            }
+            for (let i = coins.length - 1; i >= 0; i--) {
+                coins[i].update(); coins[i].draw();
+                if (coins[i].x < -100 || coins[i].x > canvas.width + 100) coins.splice(i, 1);
+            }
+
+            if (checkCollisions(p1) || (isDual() && checkCollisions(p2))) {
+                gameActive = false; playSound('crash');
+                setTimeout(() => {
+                    ui.finalScore.innerText = `Final Score: ${score}`;
+                    ui.finalCoins.innerText = `Coins: ${coinsCount}`;
+                    ui.gameOver.classList.remove('hidden');
+                }, 300);
+                return;
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function selectMode(selected) {
+            mode = selected; activeMode = mode === 'all' ? 'single' : mode;
+            ui.mode.innerText = activeMode.toUpperCase();
+            ui.splash.classList.add('hidden'); ui.gameOver.classList.add('hidden');
+            
+            p1.reset(); if(isDual()) p2.reset();
+            obstacles = []; coins = []; frames = 0; score = 0; coinsCount = 0;
+            if(mode === 'all') nextChaosFrame = 600;
+            
+            gameActive = true; 
+            
+            if (typeof AudioContext !== 'undefined') {
+                if (!audioCtx) audioCtx = new AudioContext();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            }
+            
+            gameLoop();
+        }
+
+        function resetGame() { selectMode(mode); }
+        function showMenu() { gameActive = false; ui.gameOver.classList.add('hidden'); ui.splash.classList.remove('hidden'); }
+
+        function input(e) {
+            if (e.type === 'keydown' && (e.code !== 'Space' && e.code !== 'ArrowUp')) return;
+            if (e.type === 'keydown' && e.repeat) return;
+            if (!gameActive) return;
+            
+            p1.jump(); if (isDual()) p2.jump();
+        }
+
+        window.addEventListener('keydown', input);
+        
+        window.addEventListener('touchstart', (e) => { 
+            if (e.target.tagName === 'BUTTON') return; 
+            e.preventDefault(); 
+            input(e); 
+        }, { passive: false });
+
+        window.addEventListener('mousedown', (e) => {
+            if (e.target.tagName === 'BUTTON') return;
+            input(e);
+        });
+
+        drawBackground(); p1.draw();
+    </script>
+</body>
+</html>
