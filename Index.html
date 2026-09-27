@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geometry Chaos - Hardcore Rush Edition</title>
+    <link id="favicon" rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2305050d'/><rect x='4' y='4' width='24' height='24' rx='3' fill='%23ff3366' stroke='%23000' stroke-width='2'/><rect x='10' y='10' width='12' height='12' fill='%23000'/><rect x='13' y='13' width='6' height='6' fill='%23fff'/></svg>">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body {
+            background-color: #05050d; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex; justify-content: center; align-items: center; min-height: 100vh;
+            overflow: hidden; color: white;
+        }
+        #game-container {
+            position: relative; box-shadow: 0 0 60px rgba(255, 51, 102, 0.4);
+            border-radius: 12px; overflow: hidden; border: 2px solid rgba(255, 51, 102, 0.3);
+        }
+        canvas { display: block; }
+        #ui {
+            position: absolute; top: 15px; left: 20px; right: 20px; display: flex;
+            justify-content: space-between; font-size: 18px; font-weight: 800;
+            text-shadow: 0 0 8px rgba(0,0,0,0.9); pointer-events: none; z-index: 5;
+        }
+        .stats-group { display: flex; gap: 15px; }
+        .stat-box {
+            background: rgba(0, 0, 0, 0.6); padding: 6px 14px; border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        #chaos-alert {
+            position: absolute; top: 75px; left: 50%; transform: translateX(-50%);
+            background: rgba(255, 0, 255, 0.85); color: #fff; font-size: 20px; font-weight: bold;
+            padding: 8px 24px; border-radius: 25px; box-shadow: 0 0 20px rgba(255, 0, 255, 0.8);
+            pointer-events: none; transition: opacity 0.3s ease-in-out; z-index: 6;
+        }
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(8, 8, 16, 0.92); backdrop-filter: blur(6px); display: flex;
+            flex-direction: column; justify-content: center; align-items: center; gap: 15px; z-index: 10;
+        }
+        .overlay h1 {
+            color: #ff3366; font-size: 38px; text-transform: uppercase; letter-spacing: 3px;
+            text-shadow: 0 0 20px rgba(255, 51, 102, 0.6); margin-bottom: 2px; text-align: center;
+        }
+        .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 88%; max-width: 550px; }
+        .btn {
+            background: linear-gradient(45deg, #ff3366, #ff00ff); color: #fff; border: none;
+            padding: 12px 14px; font-size: 14px; font-weight: bold; border-radius: 25px;
+            cursor: pointer; transition: transform 0.1s, box-shadow 0.2s; box-shadow: 0 0 15px rgba(255, 51, 102, 0.4); text-align: center;
+        }
+        .btn:hover { transform: scale(1.04); box-shadow: 0 0 25px rgba(255, 51, 102, 0.8); }
+        .btn:active { transform: scale(0.95); }
+        .btn-full {
+            grid-column: span 2; background: linear-gradient(45deg, #00ffcc, #ff3366); color: #000;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.4); font-size: 16px;
+        }
+        .btn-full:hover { box-shadow: 0 0 25px rgba(0, 255, 204, 0.8); }
+        .score-summary { font-size: 18px; color: #ddd; text-align: center; line-height: 1.5; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="ui">
+            <div class="stats-group">
+                <div class="stat-box" id="score">Score: 0</div>
+                <div class="stat-box" id="coins" style="color: #ffd700;">🪙 0</div>
+            </div>
+            <div class="stat-box" id="mode-display" style="color: #ff3366;">SINGLE MODE</div>
+            <div class="stat-box" id="highscore">Best: 0</div>
+        </div>
+
+        <div id="chaos-alert" class="hidden">🌀 MODE SWITCH!</div>
+
+        <!-- Splash Screen -->
+        <div id="splash-screen" class="overlay">
+            <h1>GEOMETRY CHAOS</h1>
+            <p style="color: #aaa; margin-bottom: 5px;">Hardcore Rush Edition • Maximum Challenge</p>
+            <div class="mode-grid">
+                <button class="btn" onclick="selectMode('single')">1. Single Level</button>
+                <button class="btn" onclick="selectMode('double')">2. Double Floor Level</button>
+                <button class="btn" onclick="selectMode('mirrored')">3. Mirrored Level</button>
+                <button class="btn" onclick="selectMode('double-mirrored')">4. Double Floor Mirrored</button>
+                <button class="btn btn-full" style="background: linear-gradient(45deg, #ff00ff, #00ffcc); color: #000;" onclick="selectMode('dual')">5. Double Layer Dual Mode</button>
+                <button class="btn btn-full" onclick="selectMode('all')">🌀 ALL MODES (Chaos Shift 12-18s)</button>
+            </div>
+        </div>
+
+        <!-- Game Over -->
+        <div id="game-over" class="overlay hidden">
+            <h1 style="color: #ff3366;">Game Over</h1>
+            <div class="score-summary">
+                <p id="final-score">Score: 0</p>
+                <p id="final-coins" style="color: #ffd700;">Coins Collected: 0</p>
+            </div>
+            <div style="display: flex; gap: 15px; margin-top: 10px;">
+                <button class="btn" onclick="resetGame()">Play Again</button>
+                <button class="btn" style="background: #444; color: #fff;" onclick="showSplash()">Menu</button>
+            </div>
+        </div>
+
+        <canvas id="canvas" width="850" height="480"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const scoreEl = document.getElementById('score');
+        const coinsEl = document.getElementById('coins');
+        const highscoreEl = document.getElementById('highscore');
+        const modeDisplayEl = document.getElementById('mode-display');
+        const chaosAlertEl = document.getElementById('chaos-alert');
+        const finalScoreEl = document.getElementById('final-score');
+        const finalCoinsEl = document.getElementById('final-coins');
+        const splashScreen = document.getElementById('splash-screen');
+        const gameOverMenu = document.getElementById('game-over');
+
+        // --- AUDIO & MUSIC SYNTHESIZER ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+        let musicInterval = null;
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            startBGM();
+        }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            if (type === 'jump') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.type = 'square';
+                osc.frequency.setValueAtTime(180, now); osc.frequency.exponentialRampToValueAtTime(480, now + 0.12);
+                gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                osc.start(now); osc.stop(now + 0.12);
+            } else if (type === 'bounce') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.type = 'square';
+                osc.frequency.setValueAtTime(300, now); osc.frequency.exponentialRampYToValueAtTime ? osc.frequency.exponentialRampToValueAtTime(700, now + 0.12) : osc.frequency.exponentialRampToValueAtTime(700, now + 0.12);
+                gain.gain.setValueAtTime(0.12, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                osc.start(now); osc.stop(now + 0.12);
+            } else if (type === 'doubleJump') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.type = 'triangle';
+                osc.frequency.setValueAtTime(350, now); osc.frequency.exponentialRampToValueAtTime(700, now + 0.12);
+                gain.gain.setValueAtTime(0.12, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                osc.start(now); osc.stop(now + 0.12);
+            } else if (type === 'coin') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.type = 'sine';
+                osc.frequency.setValueAtTime(900, now); osc.frequency.setValueAtTime(1350, now + 0.06);
+                gain.gain.setValueAtTime(0.15, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now); osc.stop(now + 0.2);
+            } else if (type === 'crash') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(140, now); osc.frequency.exponentialRampToValueAtTime(25, now + 0.25);
+                gain.gain.setValueAtTime(0.25, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.start(now); osc.stop(now + 0.25);
+            }
+        }
+
+        function startBGM() {
+            if (musicInterval) clearInterval(musicInterval);
+            const bassNotes = [120, 120, 160, 140, 100, 100, 130, 120];
+            let step = 0;
+            musicInterval = setInterval(() => {
+                if (!gameActive || !audioCtx) return;
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                let freq = bassNotes[step % bassNotes.length];
+                osc.frequency.setValueAtTime(freq, now);
+                gain.gain.setValueAtTime(0.04, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+                osc.start(now); osc.stop(now + 0.14);
+                step++;
+            }, 145); // Faster beat interval
+        }
+
+        function stopBGM() {
+            if (musicInterval) { clearInterval(musicInterval); musicInterval = null; }
+        }
+
+        const FLOOR1_Y = 400; const FLOOR2_Y = 200; 
+        const DUAL_L1_GROUND = 210; const DUAL_L2_GROUND = 270;
+        
+        // HARDCORE PHYSICS: Higher gravity, faster base speed, punchier jump force
+        const GRAVITY = 0.78; 
+        const JUMP_FORCE = -13.2; 
+        const BOUNCE_FORCE = -17.5; 
+        const BASE_SPEED = 7.2;
+
+        let selectedGameMode = 'single'; let currentActiveMode = 'single';
+        let currentSpeed = BASE_SPEED; let gameActive = false;
+        let totalScore = 0; let coinsCollected = 0; let frameCount = 0;
+        let safeUntilFrame = 0; let nextChaosFrame = 0; let bgHue = 330;
+
+        let obstacles = []; let coins = []; let particles = [];
+
+        function isMirroredMode() { return currentActiveMode === 'mirrored' || currentActiveMode === 'double-mirrored'; }
+        function isDoubleMode() { return currentActiveMode === 'double' || currentActiveMode === 'double-mirrored'; }
+        function isDualMode() { return currentActiveMode === 'dual'; }
+
+        function getHighScore(mode) { return localStorage.getItem(`gc_hardcore_highscore_${mode}`) || 0; }
+        function updateHighScoreUI() { highscoreEl.innerText = `Best: ${getHighScore(selectedGameMode)}`; }
+
+        function triggerChaosShift() {
+            const modes = ['single', 'double', 'mirrored', 'double-mirrored', 'dual'];
+            let newMode = currentActiveMode;
+            while (newMode === currentActiveMode) newMode = modes[Math.floor(Math.random() * modes.length)];
+            currentActiveMode = newMode; modeDisplayEl.innerText = `${currentActiveMode.toUpperCase()}`;
+            player1.reset(); if (isDualMode()) player2.reset();
+            obstacles = []; coins = []; safeUntilFrame = frameCount + 70;
+            chaosAlertEl.innerText = `🌀 CHAOS: ${currentActiveMode.toUpperCase()}`; chaosAlertEl.classList.remove('hidden');
+            setTimeout(() => chaosAlertEl.classList.add('hidden'), 1500);
+            nextChaosFrame = frameCount + Math.floor(Math.random() * 250) + 700;
+        }
+
+        class Particle {
+            constructor(x, y, vx, vy, color, size, life) {
+                this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+                this.color = color; this.size = size; this.life = life; this.maxLife = life;
+            }
+            update() { this.x += this.vx; this.y += this.vy; this.life--; }
+            draw() {
+                ctx.save(); ctx.globalAlpha = this.life / this.maxLife; ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size); ctx.restore();
+            }
+        }
+        function createSparks(x, y, color) {
+            for (let i = 0; i < 3; i++) particles.push(new Particle(x, y, (Math.random() - 0.5) * 6, Math.random() * -3, color, 3, 12));
+        }
+
+        class Player {
+            constructor(layer = 1) {
+                this.layer = layer; this.size = 32; this.color = layer === 1 ? '#ff3366' : '#00ffcc'; this.baseX = 120; this.reset();
+            }
+            reset() {
+                this.baseX = isMirroredMode() ? canvas.width - 150 : 120;
+                this.x = this.baseX;
+                if (isDualMode()) this.y = this.layer === 1 ? DUAL_L1_GROUND - this.size : DUAL_L2_GROUND;
+                else this.y = FLOOR1_Y - this.size;
+                this.vy = 0; this.rotation = 0; this.isGrounded = true; this.jumpCount = 0; this.maxJumps = 2; 
+                this.isSliding = false;
+            }
+            jump() {
+                if (this.jumpCount < this.maxJumps) {
+                    this.vy = (isDualMode() && this.layer === 2) ? -JUMP_FORCE : JUMP_FORCE;
+                    this.isGrounded = false; this.isSliding = false;
+                    playSound(this.jumpCount === 0 ? 'jump' : 'doubleJump');
+                    this.jumpCount++;
+                }
+            }
+            update() {
+                if (this.x < this.baseX) this.x += 1;
+                if (this.x > this.baseX) this.x -= 1;
+
+                if (isDualMode()) {
+                    if (this.layer === 1) {
+                        this.vy += GRAVITY; this.y += this.vy;
+                        if (this.y >= DUAL_L1_GROUND - this.size) {
+                            this.y = DUAL_L1_GROUND - this.size; this.vy = 0; this.isGrounded = true; this.jumpCount = 0; this.isSliding = false;
+                            this.rotation = Math.round(this.rotation / (Math.PI / 2)) * (Math.PI / 2);
+                        } else { this.isGrounded = false; if(!this.isSliding) this.rotation += 0.15; }
+                    } else {
+                        this.vy -= GRAVITY; this.y += this.vy;
+                        if (this.y <= DUAL_L2_GROUND) {
+                            this.y = DUAL_L2_GROUND; this.vy = 0; this.isGrounded = true; this.jumpCount = 0; this.isSliding = false;
+                            this.rotation = Math.round(this.rotation / (Math.PI / 2)) * (Math.PI / 2);
+                        } else { this.isGrounded = false; if(!this.isSliding) this.rotation -= 0.15; }
+                    }
+                    return;
+                }
+
+                this.vy += GRAVITY; this.y += this.vy;
+                let landed = false;
+
+                if (!landed && this.y >= FLOOR1_Y - this.size) {
+                    this.y = FLOOR1_Y - this.size; this.vy = 0; this.isGrounded = true; this.jumpCount = 0; this.isSliding = false;
+                    landed = true; this.rotation = Math.round(this.rotation / (Math.PI / 2)) * (Math.PI / 2);
+                }
+                if (!landed) { this.isGrounded = false; if(!this.isSliding) this.rotation += isMirroredMode() ? -0.15 : 0.15; }
+            }
+            draw() {
+                ctx.save(); ctx.translate(this.x + this.size / 2, this.y + this.size / 2); ctx.rotate(this.rotation);
+                ctx.shadowColor = this.color; ctx.shadowBlur = 12; ctx.fillStyle = this.color;
+                ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
+                ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.strokeRect(-this.size / 2, -this.size / 2, this.size, this.size);
+                ctx.fillStyle = '#000'; ctx.fillRect(-this.size / 4, -this.size / 4, this.size / 2, this.size / 2);
+                ctx.restore();
+            }
+        }
+
+        const player1 = new Player(1); const player2 = new Player(2);
+
+        // --- OBJECT CLASSES --- //
+
+        class Spike {
+            constructor(x, yFloor, layer = 1) {
+                this.x = x; this.width = 34; this.height = 34; this.layer = layer;
+                this.y = (isDualMode() && layer === 2) ? yFloor : yFloor - this.height;
+            }
+            update() { this.x += isMirroredMode() ? currentSpeed : -currentSpeed; }
+            draw() {
+                ctx.save(); ctx.shadowColor = '#ff0055'; ctx.shadowBlur = 10; ctx.fillStyle = '#ff0055';
+                ctx.beginPath();
+                if (isDualMode() && this.layer === 2) {
+                    ctx.moveTo(this.x, this.y); ctx.lineTo(this.x + this.width / 2, this.y + this.height); ctx.lineTo(this.x + this.width, this.y);
+                } else {
+                    ctx.moveTo(this.x, this.y + this.height); ctx.lineTo(this.x + this.width / 2, this.y); ctx.lineTo(this.x + this.width, this.y + this.height);
+                }
+                ctx.fill(); ctx.restore();
+            }
+        }
+
+        class Pillar {
+            constructor(x, yFloor, height, layer = 1) {
+                this.x = x; this.width = 42; this.height = height; this.layer = layer;
+                this.y = (isDualMode() && layer === 2) ? yFloor : yFloor - height;
+            }
+            update() { this.x += isMirroredMode() ? currentSpeed : -currentSpeed; }
+            draw() {
+                ctx.save(); ctx.shadowColor = '#ffaa00'; ctx.shadowBlur = 6;
+                let grad = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.height);
+                grad.addColorStop(0, '#ffcc00'); grad.addColorStop(1, '#cc5500');
+                ctx.fillStyle = grad; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.strokeRect(this.x, this.y, this.width, this.height);
+                ctx.restore();
+            }
+        }
+
+        class CircleBouncer {
+            constructor(x, yFloor, offset, layer = 1) {
+                this.x = x; this.radius = 20; this.layer = layer;
+                this.y = (isDualMode() && layer === 2) ? yFloor + offset : yFloor - offset;
+            }
+            update() { this.x += isMirroredMode() ? currentSpeed : -currentSpeed; }
+            draw() {
+                ctx.save(); ctx.shadowColor = '#00ffff'; ctx.shadowBlur = 15; ctx.fillStyle = '#00ccff';
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke();
+                ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius / 2.5, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class SlideRail {
+            constructor(x, yFloor, layer = 1) {
+                this.x = x; this.width = 170; this.height = 12; this.layer = layer;
+                this.y = (isDualMode() && layer === 2) ? yFloor + 45 : yFloor - 75;
+            }
+            update() { this.x += isMirroredMode() ? currentSpeed : -currentSpeed; }
+            draw() {
+                ctx.save(); ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 10; ctx.fillStyle = '#ff00ff';
+                ctx.fillRect(this.x, this.y, this.width, this.height); ctx.restore();
+            }
+        }
+
+        class ConveyorBelt {
+            constructor(x, yFloor, pushSpeed, layer = 1) {
+                this.x = x; this.width = 160; this.height = 26; this.layer = layer;
+                this.y = (isDualMode() && layer === 2) ? yFloor : yFloor - this.height;
+                this.pushSpeed = pushSpeed;
+            }
+            update() { this.x += isMirroredMode() ? currentSpeed : -currentSpeed; }
+            draw() {
+                ctx.save(); ctx.fillStyle = '#222'; ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.strokeStyle = '#ff3366'; ctx.lineWidth = 3; ctx.strokeRect(this.x, this.y, this.width, this.height);
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+                let offset = (frameCount * this.pushSpeed * 2.5) % 18;
+                for(let i = 0; i < this.width; i+= 18) {
+                    let treadX = this.x + i + (offset > 0 ? offset : 18 + offset);
+                    if (treadX > this.x && treadX < this.x + this.width) {
+                        ctx.beginPath(); ctx.moveTo(treadX, this.y); ctx.lineTo(treadX, this.y + this.height); ctx.stroke();
+                    }
+                }
+                ctx.restore();
+            }
+        }
+
+        class Coin {
+            constructor(x, y) { this.x = x; this.y = y; this.size = 18; this.collected = false; }
+            update() { this.x += isMirroredMode() ? currentSpeed : -currentSpeed; }
+            draw() {
+                if (this.collected) return;
+                ctx.save(); ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 10; ctx.fillStyle = '#ffd700';
+                ctx.beginPath(); ctx.arc(this.x + this.size/2, this.y + this.size/2, this.size/2, 0, Math.PI*2); ctx.fill(); ctx.restore();
+            }
+        }
+
+        // Hardcore layout generator: denser spacing and punishing layouts
+        function spawnSequence(spawnX, yFloor, layer) {
+            let rand = Math.random();
+            
+            if (rand < 0.22) { 
+                // Quintuple rapid-fire spike trap
+                obstacles.push(new Spike(spawnX, yFloor, layer));
+                obstacles.push(new Spike(spawnX + 32, yFloor, layer));
+                obstacles.push(new Spike(spawnX + 64, yFloor, layer));
+                obstacles.push(new Spike(spawnX + 96, yFloor, layer));
+                obstacles.push(new Spike(spawnX + 128, yFloor, layer));
+                coins.push(new Coin(spawnX + 64, yFloor - 110));
+            } 
+            else if (rand < 0.44) { 
+                // High-speed alternating bounce maze
+                obstacles.push(new CircleBouncer(spawnX, yFloor, 50, layer));
+                obstacles.push(new CircleBouncer(spawnX + 65, yFloor, 110, layer));
+                obstacles.push(new CircleBouncer(spawnX + 130, yFloor, 60, layer));
+                coins.push(new Coin(spawnX + 65, yFloor - 145));
+            }
+            else if (rand < 0.66) {
+                // Short slide rail over double spikes
+                obstacles.push(new SlideRail(spawnX, yFloor, layer));
+                obstacles.push(new Spike(spawnX + 65, yFloor, layer));
+                obstacles.push(new Spike(spawnX + 100, yFloor, layer));
+                coins.push(new Coin(spawnX + 80, yFloor - 95));
+            }
+            else if (rand < 0.85) {
+                // Hazardous backward conveyor leading straight into a spike wall
+                let pushSpeed = Math.random() > 0.4 ? 4 : -4;
+                obstacles.push(new ConveyorBelt(spawnX, yFloor, pushSpeed, layer));
+                obstacles.push(new Spike(spawnX + 165, yFloor, layer));
+                coins.push(new Coin(spawnX + 75, yFloor - 55));
+            }
+            else { 
+                // Brutal triple pillar step-up
+                let gap = 55; let w = 38;
+                obstacles.push(new Pillar(spawnX, yFloor, 50, layer));
+                obstacles.push(new Pillar(spawnX + w + gap, yFloor, 90, layer));
+                let p3X = spawnX + (w*2) + (gap*2);
+                obstacles.push(new Pillar(p3X, yFloor, 130, layer));
+                coins.push(new Coin(p3X + 8, yFloor - 150));
+            }
+        }
+
+        function spawnElements() {
+            if (frameCount < safeUntilFrame) return;
+
+            // Extremely tight spawn intervals for unrelenting difficulty
+            if (frameCount % Math.max(50, Math.floor(80 - (currentSpeed - BASE_SPEED) * 6)) === 0) {
+                const spawnX = isMirroredMode() ? -50 : canvas.width + 50;
+
+                if (isDualMode()) {
+                    spawnSequence(spawnX, DUAL_L1_GROUND, 1);
+                    spawnSequence(spawnX, DUAL_L2_GROUND, 2);
+                } else {
+                    spawnSequence(spawnX, FLOOR1_Y, 1);
+                }
+            }
+        }
+
+        function checkPlayerCollision(p) {
+            for (let coin of coins) {
+                if (!coin.collected && p.x < coin.x + coin.size && p.x + p.size > coin.x && p.y < coin.y + coin.size && p.y + p.size > coin.y) {
+                    coin.collected = true; coinsCollected++; playSound('coin');
+                }
+            }
+
+            for (let obs of obstacles) {
+                if (obs.layer !== p.layer) continue;
+
+                if (obs instanceof Spike) {
+                    if (p.x < obs.x + obs.width - 5 && p.x + p.size > obs.x + 5 && p.y < obs.y + obs.height - 5 && p.y + p.size > obs.y + 5) return true;
+                }
+                else if (obs instanceof Pillar) {
+                    if (p.x < obs.x + obs.width && p.x + p.size > obs.x && p.y < obs.y + obs.height && p.y + p.size > obs.y) {
+                        let prevY = p.y - p.vy;
+                        if ((!isDualMode() || p.layer === 1) && prevY + p.size <= obs.y + 12 && p.vy >= 0) {
+                            p.y = obs.y - p.size; p.vy = 0; p.isGrounded = true; p.jumpCount = 0;
+                            p.rotation = Math.round(p.rotation / (Math.PI / 2)) * (Math.PI / 2);
+                        } 
+                        else if (isDualMode() && p.layer === 2 && prevY >= obs.y + obs.height - 12 && p.vy <= 0) {
+                            p.y = obs.y + obs.height; p.vy = 0; p.isGrounded = true; p.jumpCount = 0;
+                            p.rotation = Math.round(p.rotation / (Math.PI / 2)) * (Math.PI / 2);
+                        } else return true;
+                    }
+                }
+                else if (obs instanceof CircleBouncer) {
+                    let dx = (p.x + p.size/2) - obs.x;
+                    let dy = (p.y + p.size/2) - obs.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < obs.radius + p.size/2 - 2) {
+                        p.vy = (isDualMode() && p.layer === 2) ? Math.abs(BOUNCE_FORCE) : BOUNCE_FORCE;
+                        p.isGrounded = false; p.jumpCount = 1;
+                        playSound('bounce');
+                    }
+                }
+                else if (obs instanceof SlideRail) {
+                    if (p.x < obs.x + obs.width && p.x + p.size > obs.x && p.y < obs.y + obs.height && p.y + p.size > obs.y) {
+                        if (p.vy >= 0 && p.y + p.size <= obs.y + 18) {
+                            p.y = obs.y - p.size; p.vy = 0; p.isGrounded = true; p.jumpCount = 0;
+                            p.isSliding = true; p.rotation = 0;
+                            createSparks(p.x + p.size/2, p.y + p.size, '#ff00ff');
+                        } else return true;
+                    }
+                }
+                else if (obs instanceof ConveyorBelt) {
+                    if (p.x < obs.x + obs.width && p.x + p.size > obs.x && p.y < obs.y + obs.height && p.y + p.size > obs.y) {
+                        if (p.vy >= 0 && p.y + p.size <= obs.y + 12) {
+                            p.y = obs.y - p.size; p.vy = 0; p.isGrounded = true; p.jumpCount = 0; p.isSliding = false;
+                            p.rotation = Math.round(p.rotation / (Math.PI / 2)) * (Math.PI / 2);
+                            p.x += obs.pushSpeed;
+                        } else return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function drawEnvironment() {
+            bgHue = (bgHue + 0.08) % 360;
+            const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            bgGradient.addColorStop(0, `hsl(${bgHue}, 60%, 5%)`); bgGradient.addColorStop(1, `hsl(${bgHue}, 70%, 10%)`);
+            ctx.fillStyle = bgGradient; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (isDualMode()) {
+                ctx.fillStyle = '#0a0508'; ctx.fillRect(0, DUAL_L1_GROUND, canvas.width, DUAL_L2_GROUND - DUAL_L1_GROUND);
+                ctx.shadowColor = '#ff3366'; ctx.shadowBlur = 10; ctx.strokeStyle = '#ff3366'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.moveTo(0, DUAL_L1_GROUND); ctx.lineTo(canvas.width, DUAL_L1_GROUND); ctx.stroke();
+                ctx.shadowColor = '#00ffcc'; ctx.strokeStyle = '#00ffcc';
+                ctx.beginPath(); ctx.moveTo(0, DUAL_L2_GROUND); ctx.lineTo(canvas.width, DUAL_L2_GROUND); ctx.stroke();
+                ctx.shadowBlur = 0; return;
+            }
+
+            ctx.fillStyle = '#0a0508'; ctx.fillRect(0, FLOOR1_Y, canvas.width, canvas.height - FLOOR1_Y);
+            ctx.shadowColor = '#ff3366'; ctx.shadowBlur = 12; ctx.strokeStyle = '#ff3366'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(0, FLOOR1_Y); ctx.lineTo(canvas.width, FLOOR1_Y); ctx.stroke(); ctx.shadowBlur = 0;
+        }
+
+        function gameLoop() {
+            if (!gameActive) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height); frameCount++;
+            if (selectedGameMode === 'all' && frameCount >= nextChaosFrame) triggerChaosShift();
+
+            currentSpeed = BASE_SPEED + Math.floor(frameCount / 250) * 0.6;
+            totalScore = Math.floor(frameCount / 3) + (coinsCollected * 75);
+            scoreEl.innerText = `Score: ${totalScore}`; coinsEl.innerText = `🪙 ${coinsCollected}`;
+
+            drawEnvironment(); spawnElements();
+
+            player1.update(); player1.draw();
+            if (isDualMode()) { player2.update(); player2.draw(); }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].update(); obstacles[i].draw();
+                if (obstacles[i].x < -200 || obstacles[i].x > canvas.width + 200) obstacles.splice(i, 1);
+            }
+            for (let i = coins.length - 1; i >= 0; i--) {
+                coins[i].update(); coins[i].draw();
+                if (coins[i].x < -100 || coins[i].x > canvas.width + 100) coins.splice(i, 1);
+            }
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update(); particles[i].draw();
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+
+            if (checkPlayerCollision(player1) || (isDualMode() && checkPlayerCollision(player2))) { 
+                gameActive = false; stopBGM(); playSound('crash');
+                setTimeout(() => {
+                    finalScoreEl.innerText = `Final Score: ${totalScore}`;
+                    finalCoinsEl.innerText = `Coins Collected: ${coinsCollected} (+${coinsCollected * 75} pts)`;
+                    gameOverMenu.classList.remove('hidden');
+                }, 400);
+                return; 
+            }
+            requestAnimationFrame(gameLoop);
+        }
+
+        function selectMode(mode) {
+            selectedGameMode = mode; currentActiveMode = mode === 'all' ? 'single' : mode;
+            modeDisplayEl.innerText = `${selectedGameMode.toUpperCase()}`; updateHighScoreUI();
+            initAudio(); gameActive = true; splashScreen.classList.add('hidden');
+            player1.reset(); if (isDualMode()) player2.reset();
+            obstacles = []; coins = []; particles = []; frameCount = 0; coinsCollected = 0; safeUntilFrame = 70;
+            if (selectedGameMode === 'all') nextChaosFrame = 700;
+            gameLoop();
+        }
+
+        function resetGame() { selectMode(selectedGameMode); gameOverMenu.classList.add('hidden'); }
+        function showSplash() { gameActive = false; stopBGM(); gameOverMenu.classList.add('hidden'); splashScreen.classList.remove('hidden'); }
+
+        function handleInput(e) {
+            if (e.code === 'Space' || e.code === 'ArrowUp' || e.type === 'touchstart' || e.type === 'mousedown') {
+                if (e.type === 'keydown' && e.repeat) return;
+                if (!gameActive) return;
+                player1.jump(); if (isDualMode()) player2.jump();
+            }
+        }
+
+        window.addEventListener('keydown', handleInput);
+        canvas.addEventListener('mousedown', handleInput);
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(e); });
+
+        drawEnvironment(); player1.draw();
+    </script>
+</body>
+</html>
